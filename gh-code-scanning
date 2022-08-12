@@ -48,6 +48,24 @@ class GitBranch(object):
         logging.debug('%s: command=%s exit-status=%d', self.repository, p.args, p.returncode)
         return p.stdout.decode('utf-8').strip()
 
+    def create_branch(self, new_branch_name):
+        """Create a new branch from the HEAD of this branch."""
+        logging.info('%s: Creating branch "%s"', self.repository, new_branch_name)
+        p = subprocess.run(
+            [
+                self.repository.gh_exe,
+                'api',
+                '/repos/%s/git/refs' % self.repository,
+                '--method=POST',
+                '--raw-field=ref=refs/heads/%s' % new_branch_name,
+                '--raw-field=sha=%s' % self.head(),
+            ],
+            stdout=True,
+            stderr=True,
+        )
+        logging.debug('%s: command=%s exit-status=%d', self.repository, p.args, p.returncode)
+        return GitBranch(new_branch_name, self.repository)
+
 class GithubRepository(object):
     def __init__(self, nwo, gh_exe):
         self.gh_exe = gh_exe
@@ -293,23 +311,7 @@ def do_enable(args):
         }
 
         if not args.git_push:
-            branch_sha1 = repo.branch().head()
-            logging.debug('%s: branch=%s SHA-1=%s', repo, repo.branch(), branch_sha1)
-
-            logging.info('%s: creating branch "%s"', repo, branch_name)
-            p = subprocess.run(
-                [
-                    args.gh,
-                    'api',
-                    '/repos/%s/git/refs' % repo,
-                    '--method=POST',
-                    '--raw-field=ref=refs/heads/%s' % branch_name,
-                    '--raw-field=sha=%s' % branch_sha1,
-                ],
-                stdout=output,
-                stderr=output,
-            )
-            logging.debug('%s: command=%s exit-status=%d', repo, p.args, p.returncode)
+            repo.branch().create_branch(branch_name)
 
         logging.info('%s: creating workflow file "%s"', repo, workflow_dstpath)
         p = subprocess.run(
